@@ -7,6 +7,10 @@ call clrscr
 mov bx, HELLO_MSG
 call println
 
+; Print a number in hex
+mov dx, 0xef70
+call println_hex
+
 ; Print end message.
 mov bx, GOODBYE_MSG
 call println
