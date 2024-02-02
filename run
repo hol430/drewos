@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ $# != 1 ]
-then
-	echo "Usage: $0 <file.asm>"
-	exit 1
-fi
+# Build kernel.
+i686-elf-gcc -ffreestanding -Wall -Wextra -pedantic -Werror -c kernel.c -o bin/kernel.o
+i686-elf-ld -o bin/kernel.bin -Ttext 0x0 --oformat binary bin/kernel.o
+ndisasm -b 32 bin/kernel.bin >kernel.dis
 
-INFILE="${1}"
-OUTDIR="bin"
+# Build bootloader.
+nasm bootloader.asm -f bin -o bin/bootloader.bin
 
-mkdir -p "${OUTDIR}"
+# Build drewos binary.
+cat bin/bootloader.bin bin/kernel.bin >bin/drewos-image
 
-OUTFILE="${OUTDIR}/${INFILE/.asm/}.bin"
-
-nasm "${INFILE}" -f bin -o "${OUTFILE}"
-qemu-system-x86_64 "${OUTFILE}"
+qemu-system-x86_64 bin/drewos-image
