@@ -1,6 +1,7 @@
 #include <stdint.h>
 
 #include "vga.h"
+#include "util.h"
 
 #define WHITE_ON_BLACK 0x0f
 #define BLACK_ON_BLACK 0x00
@@ -24,21 +25,57 @@ void clrscr() {
     y = 0;
 }
 
-void print(const char *msg) {
-    char *buf = (char *)VIDEO_MEMORY;
-    while (msg) {
-        *(buf++) = *(msg++);
-        *(buf++) = WHITE_ON_BLACK;
-    }
-}
+void print_coords(int offset);
 
-void println(const char *msg) {
+void write(const char *msg) {
+    if (!msg) {
+        return/* 0*/;
+    }
+
     char *buf = (char *)VIDEO_MEMORY + 2 * (x + y * NCOL) * sizeof(char);
-    while (msg) {
+    while (*msg) {
         *(buf++) = *(msg++);
         *(buf++) = WHITE_ON_BLACK;
     }
     int offset = (buf - (char *)VIDEO_MEMORY) / 2;
-    y = 1 + offset / NCOL;
+    y = offset / NCOL;
+    x = offset % NCOL;
+    // return offset;
+}
+
+void print(const char *msg) {
+    write(msg);
+}
+
+void println(const char *msg) {
+    write(msg);
+    y++;
     x = 0;
+}
+
+void print_coords(int offset) {
+    write(" (");
+    // Maximum value of x is 80, which requires 2 digits + NULL terminator.
+    // Largest 32-bit int requires 11 decimal digits (if negative).
+    const uint16_t BUFSIZE = 16;
+    char buf[BUFSIZE];
+    uint16_t res = itoa(x, buf, BUFSIZE);
+    if (res == 0) {
+        write(buf);
+    }
+
+    write(", ");
+
+    res = itoa(y, buf, BUFSIZE);
+    if (res == 0) {
+        write(buf);
+    }
+
+    write(", ");
+    res = itoa(offset, buf, BUFSIZE);
+    if (res == 0) {
+        write(buf);
+    }
+
+    write(")");
 }

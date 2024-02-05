@@ -6,6 +6,6 @@ void main() {
     // *(video_memory + 1) = 0x0f;
     clrscr();
     // *((int*)0xb8320)=0x07690748;
-    print("Welcome to drewOS!");
-    print("Kernel has been loaded successfully.");
+    println("Kernel has been loaded successfully.");
+    println("Welcome to drewOS!");
 }
