@@ -1,15 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build kernel.
-i686-elf-gcc -ffreestanding -Wall -Wextra -pedantic -Werror -c kernel.c -o bin/kernel.o
-i686-elf-ld -o bin/kernel.bin -Ttext 0x0 --oformat binary bin/kernel.o
-ndisasm -b 32 bin/kernel.bin >kernel.dis
-
-# Build bootloader.
-nasm bootloader.asm -f bin -o bin/bootloader.bin
-
-# Build drewos binary.
-cat bin/bootloader.bin bin/kernel.bin >bin/drewos-image
-
-qemu-system-x86_64 bin/drewos-image
+make
+qemu-system-x86_64 drewos-image

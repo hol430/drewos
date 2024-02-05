@@ -3,3 +3,6 @@ reference/
 docs/
 experiments/
 *.dis
+*.o
+*.bin
+*-image
