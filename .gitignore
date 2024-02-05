@@ -6,3 +6,4 @@ experiments/
 *.o
 *.bin
 *-image
+*.d

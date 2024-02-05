@@ -1,5 +1,7 @@
 #include <stdint.h>
 
+#include "vga.h"
+
 #define WHITE_ON_BLACK 0x0f
 #define BLACK_ON_BLACK 0x00
 #define CHAR_NULL 0x00

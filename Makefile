@@ -3,21 +3,23 @@ LD=i686-elf-ld
 NASM=nasm
 KERNEL_OFFSET=0x1000
 
+SRCS=$(wildcard *.c)
+OBJS=$(SRCS:.c=.o)
+DEPS=$(SRCS:.c=.d)
+
 CFLAGS=-ffreestanding -Wall -Wextra -pedantic -Werror
 LDFLAGS=--oformat binary -Ttext
 
+TARGET=drewos-image
+
 .PHONY: all clean
-all: drewos-image
+all: $(TARGET)
 clean:
-	$(RM) *.bin *.o *.dis drewos-image
+	$(RM) *.bin $(OBJS) *.dis $(TARGET)
 
-# Compilation of the kernel.
-kernel.o: kernel.c
-	$(CC) $(CFLAGS) -c $^ -o $@
-
-# Further C source files may be added here.
-vga.o: vga.c
-	$(CC) $(CFLAGS) -c $^ -o $@
+# Build object files from C sources.
+%.o: %.c
+	$(CC) $(CFLAGS) -MMD -MP -c -o $@ $<
 
 # Kernel entrypoint compiled as elf.
 kernel_entry.o: kernel_entry.asm
@@ -28,9 +30,11 @@ bootloader.bin: bootloader.asm
 	$(NASM) -f bin -o $@ $^
 
 # Note: kernel_entry.o MUST be the first input file passed to the linker.
-kernel.bin: kernel_entry.o kernel.o vga.o
+kernel.bin: kernel_entry.o $(OBJS)
 	$(LD) $(LDFLAGS) $(KERNEL_OFFSET) -o $@ $^
 
 # The disk image.
-drewos-image: bootloader.bin kernel.bin
+$(TARGET): bootloader.bin kernel.bin
 	cat $^ >$@
+
+-include $(DEPS)
