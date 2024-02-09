@@ -1,11 +1,19 @@
 #include "vga.h"
+#include "util.h"
 
 void main() {
-    // char *video_memory = (char *)0xb8000;
-    // *video_memory = 'x';
-    // *(video_memory + 1) = 0x0f;
     clrscr();
-    // *((int*)0xb8320)=0x07690748;
+
     println("Kernel has been loaded successfully.");
-    println("Welcome to drewOS!");
+    cprintln("Welcome to drewOS!", GREEN, BLACK);
+    println("");
+    const int NCOLOUR = 16;
+    for (int i = 0; i < NCOLOUR; i++) {
+        // colour_t fg = i % 16;
+        colour_t bg = i % 16;
+        cprint("     ", bg, bg);
+    }
+    println("\n");
+
+    println("Thank you for using DrewOS!");
 }

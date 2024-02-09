@@ -37,3 +37,9 @@ uint16_t itoa(int x, char *buf, uint16_t bufsize) {
 
     return 0;
 }
+
+void copy_memory(char *src, char *dst, uint16_t n) {
+    for (uint16_t i = 0; i < n; i++) {
+        *(dst++) = *(src++);
+    }
+}

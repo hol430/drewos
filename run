@@ -2,4 +2,14 @@
 set -euo pipefail
 
 make
+
+# Currently the bootloader only loads 15 sectors.
+# (15 * 512 = 7680)
+SIZE=$(du -b drewos-image | cut -f1)
+if [ ${SIZE} -gt 7680 ]
+then
+    echo "Need to increase number of sectors read by the boot loader."
+    exit 1
+fi
+
 qemu-system-x86_64 drewos-image
