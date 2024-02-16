@@ -1,4 +1,5 @@
 #include "vga.h"
+#include "idt.h"
 #include "util.h"
 
 void main() {
@@ -14,6 +15,10 @@ void main() {
         cprint("     ", bg, bg);
     }
     println("\n");
+
+    println("Initialising interrupts...");
+    idt_init();
+    println("Interrupts successfully initialised.");
 
     println("Thank you for using DrewOS!");
 }

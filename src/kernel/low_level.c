@@ -24,3 +24,7 @@ unsigned short read_word(unsigned short port) {
 void write_word(unsigned short port, unsigned short data) {
     __asm__("out %%ax, %%dx" : : "a" (data), "d" (port));
 }
+
+inline void io_wait() {
+    write_byte(0x80, 0);
+}

@@ -26,12 +26,16 @@ clean:
 kernel_entry.o: src/boot/kernel_entry.asm
 	$(NASM) -I src/boot -f elf $^ -o $@
 
+# Interrupts also compiled from elf as it's linked into kernel.bin.
+interrupts.o: src/kernel/interrupts.asm
+	$(NASM) -f elf $^ -o $@
+
 # Bootloader.
 bootloader.bin: src/boot/bootloader.asm
 	$(NASM) -I src/boot -f bin -o $@ $^
 
 # Note: kernel_entry.o MUST be the first input file passed to the linker.
-kernel.bin: kernel_entry.o $(OBJS)
+kernel.bin: kernel_entry.o interrupts.o $(OBJS)
 	$(LD) $(LDFLAGS) $(KERNEL_OFFSET) -o $@ $^
 
 # The disk image.

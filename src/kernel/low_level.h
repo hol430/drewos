@@ -31,4 +31,11 @@ Write a word to the specified port.
 */
 void write_word(unsigned short port, unsigned short data);
 
+/*
+Wait a very small amount of time (usually 1-4ms). Useful for implementing a
+small delay for PIC remapping on old hardware, or generally as a simple but
+imprecise wait.
+*/
+void io_wait();
+
 #endif // _DREWOS_LOW_LEVEL_H_
