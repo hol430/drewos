@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "vga.h"
 #include "low_level.h"
@@ -17,8 +18,11 @@
 // Start of video memory in VGA colour text mode.
 #define VIDEO_MEMORY 0xb8000
 
+// 757664 == 0xb8fa0
+#define VIDEO_MEMORY_MAX (VIDEO_MEMORY + 2 * NROW * NCOL)
+
 // Current screen coordinates. Note: this is not threadsafe!
-static uint8_t x, y;
+static uint8_t x = 0, y = 0;
 
 void clrscr() {
     char *buf = (void *)VIDEO_MEMORY;
@@ -39,7 +43,7 @@ void print_offset();
 /*
 Convert screen coordinates to a buffer offset.
 
-Offset can go up to 4000 (2 * 80 * 25), so uint8_t is too small for this.
+Offset can go up to 4000 (2 * 80 * 25), so uint8_t is too small for this result.
 */
 uint16_t get_offset(uint8_t x, uint8_t y) {
     return 2 * (x + y * NCOL);
@@ -141,18 +145,44 @@ void handle_scrolling() {
         return;
     }
 
+    // const uint16_t n = 16;
+    // char buf[n];
+    uint8_t yy = y;
+    uint8_t xx = x;
+
     // Move all rows back by 1.
     for (uint8_t i = 1; i < NROW; i++) {
         char *src = get_address(0, i);
         char *dst = get_address(0, i - 1);
+
+        // y = i - 1;
+        // x = NCOL - 19;
+
+        // uint16_t res = itoh((uintptr_t)src, buf, n);
+        // if (!res) {
+        //     cprint(buf, RED, BLACK);
+        // }
+        // cprint(" -> ", RED, BLACK);
+        // res = itoh((uintptr_t)dst, buf, n);
+        // if (!res) {
+        //     cprint(buf, RED, BLACK);
+        // }
+
         copy_memory(src, dst, NCOL * 2);
     }
+
+    // y = NROW - 1;
+    // x = NCOL - 14;
+    // cprint("copy success", GREEN, BLACK);
+
+    y = yy;
+    x = xx;
 
     // Empty the last line.
     char *prv = get_address(0, NROW - 1);
     for (uint8_t i = 0; i < NCOL * 2; i += 2) {
-        prv[i] = ' ';
-        prv[i + 1] = 0;
+        prv[i] = (char)(' ' & 0xff);
+        prv[i + 1] = (char)(0 & 0xff);
     }
 
     x = 0;
@@ -189,7 +219,7 @@ void write_char(char c, colour_t fg, colour_t bg) {
     uint16_t offset = (buf - (char *)VIDEO_MEMORY) / 2;
 
     // Move the cursor to this location.
-    set_cursor(offset - 1);
+    // set_cursor(offset - 1);
 
     // Update x/y globals.
     y = offset / NCOL;
@@ -201,7 +231,7 @@ void write_char(char c, colour_t fg, colour_t bg) {
 
 void cprint(const char *msg, colour_t fg, colour_t bg) {
     if (!msg) {
-        return/* 0*/;
+        return;
     }
 
     while (*msg) {
@@ -212,6 +242,7 @@ void cprint(const char *msg, colour_t fg, colour_t bg) {
 void cprintln(const char *msg, colour_t fg, colour_t bg) {
     cprint(msg, fg, bg);
     // print_offset();
+    // print_coords();
     write_char('\n', fg, bg);
 }
 
@@ -230,7 +261,7 @@ void print_offset() {
     // Largest 32-bit int requires 11 decimal digits (if negative).
     const uint8_t BUFSIZE = 16;
     char buf[BUFSIZE];
-    uint16_t res = itoa(offset, buf, BUFSIZE);
+    uint32_t res = itoa(offset, buf, BUFSIZE);
     if (res == 0) {
         print(buf);
     }
@@ -239,29 +270,32 @@ void print_offset() {
 }
 
 void print_coords() {
-    uint16_t offset = get_offset(x, y);
-    print(" (");
+    uint8_t xx = x;
+    uint8_t yy = y;
+
+    uint16_t offset = get_offset(xx, yy);
+    cprint(" (", CYAN, BLACK);
     // Maximum value of x is 80, which requires 2 digits + NULL terminator.
     // Largest 32-bit int requires 11 decimal digits (if negative).
     const uint8_t BUFSIZE = 16;
     char buf[BUFSIZE];
-    uint16_t res = itoa(x, buf, BUFSIZE);
+    uint32_t res = itoa(xx, buf, BUFSIZE);
     if (res == 0) {
-        print(buf);
+        cprint(buf, CYAN, BLACK);
     }
 
-    print(", ");
+    cprint(", ", CYAN, BLACK);
 
-    res = itoa(y, buf, BUFSIZE);
+    res = itoa(yy, buf, BUFSIZE);
     if (res == 0) {
-        print(buf);
+        cprint(buf, CYAN, BLACK);
     }
 
-    print(", ");
+    cprint(", ", CYAN, BLACK);
     res = itoa(offset, buf, BUFSIZE);
     if (res == 0) {
-        print(buf);
+        cprint(buf, CYAN, BLACK);
     }
 
-    print(")");
+    cprint(")", CYAN, BLACK);
 }

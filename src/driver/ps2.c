@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "ps2.h"
 #include "low_level.h"
@@ -49,6 +50,51 @@
 // Key detection error or internal buffer overrun.
 // #define RESP_INTERNAL_ERROR2
 
-void ps2_init() {
+// Ports
 
+// 8042 PS/2 data read/write port.
+#define PORT_PS2_DATA 0x60
+
+// 8042 PS/2 status register.
+#define PORT_PS2_STATUS 0x64
+
+// 8042 PS/2 command register. This is used for sending commands to the PS/2
+// controller (not to PS/2 devices).
+#define PORT_PS2_COMMAND 0x64
+
+static uint8_t interrupt_vector = 0x00;
+
+static bool is_responsive() {
+    write_byte(PORT_PS2_DATA, CMD_ECHO);
+    uint8_t resp = read_byte(PORT_PS2_DATA);
+    return resp == RESP_ECHO;
+}
+
+static void buffer_wait() {
+    uint8_t status;
+    while ( (status = read_byte(PORT_PS2_STATUS)) & 0x02);
+}
+
+static bool send_command(uint8_t command, uint8_t operand) {
+    if (!is_responsive()) {
+        return false;
+    }
+
+    uint8_t status = read_byte(PORT_PS2_DATA);
+    if (status != RESP_SELF_TEST_FAILED) {
+        write_byte(PORT_PS2_DATA, command);
+        buffer_wait();
+        write_byte(PORT_PS2_DATA, operand);
+        // todo: not all commands have an operand
+    }
+    return true;
+}
+
+void ps2_init() {
+    if (interrupt_vector) {
+        send_command(CMD_ECHO, CMD_ECHO);
+        return;
+    }
+
+    // todo: verify that ps2 device exists (requries acpi support)
 }

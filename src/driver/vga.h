@@ -70,4 +70,6 @@ Disable the blinking cursor.
 */
 void disable_cursor();
 
+void vga_test();
+
 #endif // _DREWOS_VGA_H_

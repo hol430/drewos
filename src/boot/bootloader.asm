@@ -39,7 +39,7 @@ load_kernel:
     mov bx, KERNEL_OFFSET
 
     ; Number of sectors to read.
-    mov dh, 15
+    mov dh, 32
 
     ; The disk to read from.
     mov dl, [BOOT_DRIVE]

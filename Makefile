@@ -3,12 +3,12 @@ LD=i686-elf-ld
 NASM=nasm
 KERNEL_OFFSET=0x1000
 
-SRCS=$(wildcard src/kernel/*.c src/driver/*.c)
+SRCS=$(wildcard src/kernel/*.c src/driver/*.c src/acpi/*.c)
 OBJS=$(SRCS:.c=.o)
 DEPS=$(SRCS:.c=.d)
 
 CFLAGS=-ffreestanding -Wall -Wextra -pedantic -Werror
-INCLUDES=-I src/kernel -I src/driver
+INCLUDES=-I src/kernel -I src/driver -I src/acpi
 LDFLAGS=--oformat binary -Ttext
 
 TARGET=drewos-image

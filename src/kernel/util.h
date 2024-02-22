@@ -3,7 +3,12 @@
 
 #include <stdint.h>
 
-uint16_t itoa(int x, char *buf, uint16_t bufsize);
+uint32_t itoa(int32_t x, char *buf, uint16_t bufsize);
+
+uint32_t itoh(int32_t x, char *buf, uint16_t bufsize);
+
+// Measure the length of a string.
+uint64_t strlen(const char *s, uint8_t maxlen);
 
 /*
 Copy n bytes from one location in memory to another location.

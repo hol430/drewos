@@ -1,9 +1,12 @@
 #include "vga.h"
 #include "idt.h"
 #include "util.h"
+#include "ps2.h"
+#include "acpi.h"
 
 void main() {
     clrscr();
+    disable_cursor();
 
     println("Kernel has been loaded successfully.");
     cprintln("Welcome to drewOS!", GREEN, BLACK);
@@ -19,6 +22,11 @@ void main() {
     println("Initialising interrupts...");
     idt_init();
     println("Interrupts successfully initialised.");
+
+    // todo: disable usb legacy support
+    // todo: init acpi
+    acpi_init();
+    ps2_init();
 
     println("Thank you for using DrewOS!");
 }

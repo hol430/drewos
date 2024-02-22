@@ -30,8 +30,8 @@ double log(double x) {
     return t + power_adjust;
 }
 
-int ipow(int base, int exponent) {
-    int result = 1;
+uint32_t ipow(uint32_t base, uint32_t exponent) {
+    uint32_t result = 1;
     while (1) {
         if (exponent & 1) {
             result *= base;
@@ -45,14 +45,14 @@ int ipow(int base, int exponent) {
     return result;
 }
 
-int ilog(int base, int x) {
-    if (base <= 0) {
-        return 0;
-    }
-
-    int result;
+uint32_t ilog(uint32_t base, uint32_t x) {
+    uint32_t result;
     for (result = 0; x >= base; result++) {
         x /= base;
     }
     return result;
+}
+
+int32_t abs(int32_t x) {
+    return x >= 0 ? x : -x;
 }
