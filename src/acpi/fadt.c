@@ -5,6 +5,7 @@
 #include "rsdt.h"
 
 #include "vga.h"
+#include "low_level.h"
 
 typedef struct {
     acpi_sdt_header_t header;
@@ -85,4 +86,13 @@ void fadt_init() {
     if (!fadt) {
         println("Failed to locate FADT");
     }
+}
+
+void acpi_enable() {
+    write_byte(fadt->smi_command_port, fadt->acpi_enable);
+    while ( (read_word(fadt->pm1a_control_block) & 1) == 0);
+}
+
+bool ps2_controller_exists() {
+    return !fadt || (fadt->boot_architecture_flags & 1) == 2;
 }

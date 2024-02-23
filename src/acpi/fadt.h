@@ -11,4 +11,14 @@ Locate and initialise the FADT.
 */
 void fadt_init();
 
+/*
+Switch to ACPI mode.
+*/
+void acpi_enable();
+
+/*
+Check whether a PS2 controller exists.
+*/
+bool ps2_controller_exists();
+
 #endif // _DREWOS_FADT_H_
