@@ -7,7 +7,7 @@ SRCS=$(wildcard src/kernel/*.c src/driver/*.c src/acpi/*.c)
 OBJS=$(SRCS:.c=.o)
 DEPS=$(SRCS:.c=.d)
 
-CFLAGS=-ffreestanding -Wall -Wextra -pedantic -Werror
+CFLAGS=-ffreestanding -Wall -Wextra -pedantic -Werror -Wno-error=address-of-packed-member
 INCLUDES=-I src/kernel -I src/driver -I src/acpi
 LDFLAGS=--oformat binary -Ttext
 

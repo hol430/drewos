@@ -3,6 +3,6 @@
 
 #include <stdbool.h>
 
-bool locate_rsdp();
+void init_rsdp();
 
 #endif // _DREWOS_RSDP_H_

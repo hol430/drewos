@@ -19,14 +19,15 @@ void main() {
     }
     println("\n");
 
-    println("Initialising interrupts...");
     idt_init();
     println("Interrupts successfully initialised.");
 
     // todo: disable usb legacy support
     // todo: init acpi
     acpi_init();
+    println("ACPI successfully initialised.");
+
     ps2_init();
 
-    println("Thank you for using DrewOS!");
+    println("\nThank you for using DrewOS!");
 }

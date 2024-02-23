@@ -5,9 +5,5 @@
 #include "rsdp.h"
 
 void acpi_init() {
-    if (locate_rsdp()) {
-        println("RSDP located successfully.");
-    } else {
-        println("Failed to locate RSDP.");
-    }
+    init_rsdp();
 }
