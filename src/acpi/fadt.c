@@ -5,6 +5,7 @@
 #include "rsdt.h"
 
 #include "vga.h"
+#include "util.h"
 #include "low_level.h"
 
 typedef struct {
@@ -94,5 +95,17 @@ void acpi_enable() {
 }
 
 bool ps2_controller_exists() {
-    return !fadt || (fadt->boot_architecture_flags & 1) == 2;
+    if (!fadt) {
+        // System doesn't support ACPI.
+        return true;
+    }
+
+    if (fadt->header.revision < 2) {
+        // FADT <2.0, assume PS/2 controller exists.
+        return true;
+    }
+
+    // The IA boot architecture flags are only used in FADT >= 2.0.
+    // If bit 2 is set, we have a PS/2 controller.
+    return (fadt->boot_architecture_flags & 2) == 2;
 }

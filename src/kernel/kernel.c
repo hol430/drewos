@@ -3,6 +3,7 @@
 #include "util.h"
 #include "ps2.h"
 #include "acpi.h"
+#include "fadt.h"
 
 void main() {
     clrscr();
@@ -27,7 +28,11 @@ void main() {
     acpi_init();
     println("ACPI successfully initialised.");
 
-    ps2_init();
+    if (ps2_controller_exists()) {
+        ps2_init();
+    } else {
+        println("ps2 controller does not exist");
+    }
 
     println("\nThank you for using DrewOS!");
 }

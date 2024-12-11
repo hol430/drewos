@@ -86,7 +86,7 @@ static bool validate_rsdp(const rsdp_t *rsdp) {
 /*
 Search for a valid RSDP pointer between the start and end addresses.
 */
-rsdp_t *sdp_search(void *start, void *end) {
+static rsdp_t *sdp_search(void *start, void *end) {
     rsdp_t *r;
 
     // Align start to nearest multiple of RSDP_ALIGN. In theory, this shouldn't
@@ -113,14 +113,13 @@ static void *locate_sdp() {
     uint32_t ebda_start = (*ebda_ptr) << 4;
     uint32_t ebda_end = ebda_start + EBDA_SIZE;
 
-    // sdp_search() will modify the rsdp pointer.
-    void *rsdp;
-    if ( (rsdp = sdp_search((void *)ebda_start, (void *)ebda_end)) ) {
-        return rsdp;
+    void *sdp;
+    if ( (sdp = sdp_search((void *)ebda_start, (void *)ebda_end)) ) {
+        return sdp;
     }
 
-    if ( (rsdp = sdp_search((void *)BIOS_MAIN_START, (void *)BIOS_MAIN_END)) ) {
-        return rsdp;
+    if ( (sdp = sdp_search((void *)BIOS_MAIN_START, (void *)BIOS_MAIN_END)) ) {
+        return sdp;
     }
 
     return false;
@@ -143,7 +142,7 @@ void init_rsdp() {
     // ACPI version can be deduced from the FADT.
     rsdt_t *rsdt = 0x00;
     xsdt_t *xsdt = 0x00;
-    if (rsdp->revision == 2) {
+    if (((rsdp_t *)sdp)->revision == 2) {
         rsdp = 0x00;
         xsdp = (xsdp_t *)sdp;
         xsdt = (xsdt_t *)(uintptr_t)xsdp->xsdt_address;
