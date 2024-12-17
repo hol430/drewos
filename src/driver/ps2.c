@@ -44,6 +44,15 @@
 
 #define CMD_RESET_DEVICE 0xff
 
+// Device-level command to enabel scanning. Response is ACK.
+#define CMD_ENABLE_SCAN 0xf4
+
+// Device-level command to disable scanning. Response is ACK.
+#define CMD_DISABLE_SCAN 0xf5
+
+// Device-level identification command. Response is ACK, device ID, and optional extra byte.
+#define CMD_IDENTIFY 0xf2
+
 // Key detection error or internal buffer overrun.
 // #define RESP_INTERNAL_ERROR2
 
@@ -64,8 +73,10 @@
 // Default max number of iterations to wait for the device to become ready.
 #define DEFAULT_WAIT 1024
 
-#define RESP_RESET_PASS0 0xfa
-#define RESP_RESET_PASS1 0xaa
+// An "acknowledge" response.
+#define RESP_ACK 0xfa
+
+#define RESP_RESET_SUCCESS 0xaa
 #define RESP_RESET_FAIL 0xfc
 
 // Data types.
@@ -123,6 +134,12 @@ typedef union {
     config_t config;
 } config_resp_t;
 
+// The ports available on the device.
+typedef enum {
+    PORT0,
+    PORT1
+} port_t;
+
 // Colours usable in VGA colour text mode.
 typedef enum {
     // Ancient AT keyboard.
@@ -148,15 +165,85 @@ typedef enum {
     // Japanese "A" keyboards.
     KBD_JPN_A,
     // NCD Sun layout keyboard.
-    KBD_NCD_SUN
+    KBD_NCD_SUN,
+    // Unknown/unrecognised device.
+    DEV_UNKNOWN
 } device_type_t;
 
 static bool port_0_operational = false;
 static bool port_1_operational = false;
 static bool dual_channel = false;
 
-// static device_type_t port_0_type;
-// static device_type_t port_1_type;
+// Device ID of the device in port 0, or 0 if empty/no device.
+static uint16_t port0_id;
+
+// Device ID of the device in port 1, or 0 if empty/no device.
+static uint16_t port1_id;
+
+static device_type_t port0_type;
+static device_type_t port1_type;
+
+static device_type_t get_device_type(uint16_t device_id) {
+    switch (device_id) {
+        case 0:
+            return MOUSE_PS2;
+        case 0x03:
+            return MOUSE_SCROLL_WHEEL;
+        case 0x04:
+            return MOUSE_5BUTTON;
+        case 0xab83:
+        case 0xabc1:
+            return KBD_MF2;
+        case 0xab84:
+            return KBD_SHORT;
+        case 0xab85:
+            return KBD_N97;
+        case 0xab86:
+            return KBD_122KEY;
+        case 0xab90:
+            return KBD_JPN_G;
+        case 0xab91:
+            return KBD_JPN_P;
+        case 0xab92:
+            return KBD_JPN_A;
+        case 0xaca1:
+            return KBD_NCD_SUN;
+        default:
+            return DEV_UNKNOWN;
+    }
+}
+
+static const char *get_device_type_str(device_type_t type) {
+    switch (type) {
+        case KBD_AT:
+            return "Ancient AT keyboard";
+        case MOUSE_PS2:
+            return "Standard PS/2 mouse";
+        case MOUSE_SCROLL_WHEEL:
+            return "Mouse with scroll wheel";
+        case MOUSE_5BUTTON:
+            return "5-button mouse";
+        case KBD_MF2:
+            return "MF2 keyboard";
+        case KBD_SHORT:
+            return "Short keyboard";
+        case KBD_N97:
+            return "NCD N-97 keyboard, or 122-Key host connect(ed) keyboard";
+        case KBD_122KEY:
+            return "122-key keyboard";
+        case KBD_JPN_G:
+            return "Japanese \"G\" keyboard";
+        case KBD_JPN_P:
+            return "Japanese \"P\" keyboard";
+        case KBD_JPN_A:
+            return "Japanese \"A\" keyboard";
+        case KBD_NCD_SUN:
+            return "NCD Sun layout keyboard";
+        case DEV_UNKNOWN:
+        default:
+            return "Unknown/unrecognised device";
+    }
+}
 
 static uint8_t get_status() {
     return read_byte(PORT_STATUS);
@@ -195,23 +282,6 @@ static bool response_wait() {
     return wait;
 }
 
-static void send_command(uint8_t command) {
-    if (!buffer_wait()) {
-        println("Error: ps/2 controller failed to enter ready state");
-        return;
-    }
-
-    write_byte(PORT_COMMAND, command);
-}
-
-static void send_data(uint8_t data) {
-    if (!buffer_wait()) {
-        println("Error: PS/2 controller faield to enter ready state");
-        return;
-    }
-    write_byte(PORT_DATA, data);
-}
-
 static bool try_read_data(uint8_t *data) {
     if (response_wait()) {
         *data = read_byte(PORT_DATA);
@@ -228,6 +298,46 @@ static uint8_t read_data() {
         return 0;
     }
     return byte;
+}
+
+static void send_data(uint8_t data) {
+    if (!buffer_wait()) {
+        println("Error: PS/2 controller faield to enter ready state");
+        return;
+    }
+    write_byte(PORT_DATA, data);
+}
+
+// Send a command to the controller.
+static void send_command(uint8_t command) {
+    if (!buffer_wait()) {
+        println("Error: ps/2 controller failed to enter ready state");
+        return;
+    }
+
+    write_byte(PORT_COMMAND, command);
+}
+
+static void expect_ack(uint8_t cmd, port_t port) {
+    uint8_t resp;
+    bool has_resp = try_read_data(&resp);
+    if (has_resp && resp != RESP_ACK) {
+        println("Error: device %d command %x failed; expected ACK (0xFA), but received %s", port, cmd, resp);
+    } else if (!has_resp) {
+        // Timeout while waiting for a response.
+        println("Error: device %d command %x did not generate a response (timeout)", port, cmd);
+    }
+    // return 1;
+}
+
+// Send a command to one of the devices.
+static void send_device_command(uint8_t cmd, port_t port) {
+    if (port == PORT1) {
+        send_command(CMD_WRITE_INPUT_PORT_1);
+    }
+    send_data(cmd);
+
+    expect_ack(cmd, port);
 }
 
 static config_resp_t get_config() {
@@ -258,46 +368,71 @@ static void print_port_error_msg(uint8_t status) {
     }
 }
 
-static void reset_port_0() {
+static void reset_port(uint16_t *device_id, port_t port) {
+    // The response from a reset device command is not necessarily ACK, so we
+    // don't use the standard send_device_command() function.
+
+    // send_device_command(CMD_RESET_DEVICE, port);
+    if (port == PORT1) {
+        send_command(CMD_WRITE_INPUT_PORT_1);
+    }
     send_data(CMD_RESET_DEVICE);
-    uint8_t resp[4];
-    bool has_byte = try_read_data(&resp[0]);
-    if (!has_byte) {
-        println("Port 0 is not populated");
-        return;
-    }
-    has_byte = try_read_data(&resp[1]);
-    if (!has_byte) {
-        println("Port 0 is not populated");
-        return;
-    }
-    has_byte = try_read_data(&resp[2]);
-    if (!has_byte) {
-        println("Port 0 is not populated");
-        return;
-    }
-    has_byte = try_read_data(&resp[3]);
-    if (!has_byte) {
-        println("Port 0 is not populated");
-        return;
+
+    const uint8_t NRESP = 3;
+    uint8_t resp[NRESP];
+    for (uint8_t i = 0; i < NRESP; i++) {
+        bool has_byte = try_read_data(&resp[i]);
+        if (!has_byte) {
+            *device_id = 0;
+            println("Port %d is not populated", port);
+            return;
+        }
     }
 
     if (resp[0] == RESP_RESET_FAIL) {
-        println("PS/2 port 0 reset failed");
+        println("Port %d reset failed", port);
         return;
     }
 
-    if ( (resp[0] == RESP_RESET_PASS0 && resp[1] == RESP_RESET_PASS1) ||
-         (resp[0] == RESP_RESET_PASS1 && resp[1] == RESP_RESET_PASS0) ) {
-        println("Successfully reset port 0");
+    // The order in which devices send these two seems to be ambiguous.
+    if ( (resp[0] == RESP_ACK && resp[1] == RESP_RESET_SUCCESS) ||
+         (resp[0] == RESP_RESET_SUCCESS && resp[1] == RESP_ACK) ) {
+    } else {
+        uint16_t response = ( (resp[0] << 8) + resp[1]);
+        println("Failed to reset port %d; resp = %x", port, response);
     }
 
-    // TODO: device ID detection.
-    int16_t device_id = (resp[2] << 8) + resp[3];
-    char buf[32];
-    itoh(device_id, buf, 32);
-    print("Port 0 device ID: ");
-    println(buf);
+    *device_id = resp[2];
+
+    // The device ID response byte seems buggy. Here we use an explicit
+    // identify command to to retrieve the correct device ID.
+
+    uint8_t special_code = 0;
+    if (resp[2] == 0xab || resp[2] == 0xac) {
+        bool has_special_code = try_read_data(&special_code);
+        if (has_special_code) {
+            *device_id = *device_id + (special_code << 8);
+        }
+    }
+
+    // Send the disable scanning command to the device.
+    send_device_command(CMD_DISABLE_SCAN, port);
+
+    // Send the identify command to the device.
+    send_device_command(CMD_IDENTIFY, port);
+
+    // Wait for the device to send up to 2 bytes of reply.
+    uint8_t response;
+    if (try_read_data(&response)) {
+        *device_id = response;
+
+        if (try_read_data(&response)) {
+            *device_id = (*device_id << 8) + response;
+        }
+    }
+
+    // Send the Enable Scanning command to the device.
+    send_device_command(CMD_ENABLE_SCAN, port);
 }
 
 void ps2_init() {
@@ -419,13 +554,28 @@ void ps2_init() {
     // not populated. 
 
     if (port_0_operational) {
-        reset_port_0();
+        reset_port(&port0_id, PORT0);
+        port0_type = get_device_type(port0_id);
+        print("Port 0 successfully initialised. Device type: ");
+        if (port0_type == DEV_UNKNOWN) {
+            println("Unknown Device (ID: %x)", port0_id);
+        } else {
+            println(get_device_type_str(port0_type));
+        }
+    } else {
+        port0_id = 0;
     }
 
-    // To send data to the first PS/2 Port:
-
-    // Set up some timer or counter to use as a time-out
-    // Poll bit 1 of the Status Register ("Input buffer empty/full") until it becomes clear, or until your time-out expires
-    // If the time-out expired, return an error
-    // Otherwise, write the data to the Data Port (IO port 0x60)
+    if (port_1_operational) {
+        reset_port(&port1_id, PORT1);
+        port1_type = get_device_type(port1_id);
+        print("Port 1 successfully initialised. Device type: ");
+        if (port0_type == DEV_UNKNOWN) {
+            println("Unknown Device (ID: %x)", port1_id);
+        } else {
+            println(get_device_type_str(port1_type));
+        }
+    } else {
+        port1_id = 0;
+    }
 }
