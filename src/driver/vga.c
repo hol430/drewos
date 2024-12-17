@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -229,29 +230,97 @@ void write_char(char c, colour_t fg, colour_t bg) {
     handle_scrolling();
 }
 
-void cprint(const char *msg, colour_t fg, colour_t bg) {
+void _cprint(const char *msg, colour_t fg, colour_t bg, va_list args) {
     if (!msg) {
         return;
     }
 
-    while (*msg) {
-        write_char(*msg++, fg, bg);
+    char var_char;
+    int32_t var_int32;
+    // uint32_t var_uint32;
+    // int64_t var_long;
+    // uint64_t var_ulong;
+    char *var_str;
+    const uint8_t bufsize = 32;
+    char buf[bufsize];
+
+    char c;
+    while ( (c = *msg++) ) {
+        if (c == '%') {
+            // Parse format specifier.
+            switch ( (c = *msg++)) {
+                case '%':
+                    // %% - Literal % character.
+                    write_char('%', fg, bg);
+                    break;
+                case 'c':
+                    // %c - Print out the character.
+                    var_char = va_arg(args, int);
+                    write_char(var_char, fg, bg);
+                    break;
+                case 's':
+                    // %s - Print out the string.
+                    var_str = va_arg(args, char *);
+                    while ( (var_char = *var_str++) ) {
+                        write_char(var_char, fg, bg);
+                    }
+                    break;
+                case 'd':
+                    // %d - Print out the number.
+                    var_int32 = va_arg(args, int32_t);
+                    itoa(var_int32, buf, bufsize);
+                    for (uint8_t i = 0; buf[i]; i++) {
+                        write_char(buf[i], fg, bg);
+                    }
+                    break;
+                case 'x':
+                    // %x - Print out the number in hex.
+                    var_int32 = va_arg(args, int32_t);
+                    itoh(var_int32, buf, bufsize);
+                    for (uint8_t i = 0; buf[i]; i++) {
+                        write_char(buf[i], fg, bg);
+                    }
+                    break;
+            }
+        } else {
+            write_char(c, fg, bg);
+        }
     }
 }
 
-void cprintln(const char *msg, colour_t fg, colour_t bg) {
-    cprint(msg, fg, bg);
+void cprint(const char *msg, colour_t fg, colour_t bg, ...) {
+    va_list args;
+    va_start(args, bg);
+    _cprint(msg, fg, bg, args);
+    va_end(args);
+}
+
+void _cprintln(const char *msg, colour_t fg, colour_t bg, va_list args) {
+    _cprint(msg, fg, bg, args);
     // print_offset();
     // print_coords();
     write_char('\n', fg, bg);
 }
 
-void println(const char *msg) {
-    cprintln(msg, WHITE, BLACK);
+void cprintln(const char *msg, colour_t fg, colour_t bg, ...) {
+    va_list(args);
+    va_start(args, bg);
+    _cprintln(msg, fg, bg, args);
+    va_end(args);
 }
 
-void print(const char *msg) {
-    cprint(msg, WHITE, BLACK);
+void println(const char *msg, ...) {
+    va_list args;
+    va_start(args, msg);
+    _cprintln(msg, WHITE, BLACK, args);
+    va_end(args);
+}
+
+void print(const char *msg, ...) {
+    va_list args;
+    va_start(args, msg);
+    _cprint(msg, WHITE, BLACK, args);
+    va_end(args);
 }
 
 void print_offset() {

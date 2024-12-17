@@ -31,8 +31,9 @@ Print a message in the specified colour with a newline at the end.
 @param msg: The text to be printed.
 @param fg: Foreground colour of the text.
 @param bg: Background colour of the text.
+@param ...: Variadic arguments.
 */
-void cprintln(const char *msg, colour_t fg, colour_t bg);
+void cprintln(const char *msg, colour_t fg, colour_t bg, ...);
 
 /*
 Print a message.
@@ -40,22 +41,25 @@ Print a message.
 @param msg: The text to be printed.
 @param fg: Foreground colour of the text.
 @param bg: Background colour of the text.
+@param ...: Variadic arguments.
 */
-void cprint(const char *msg, colour_t fg, colour_t bg);
+void cprint(const char *msg, colour_t fg, colour_t bg, ...);
 
 /*
 Print a message with default colours and a newline at the end.
 
 @param msg: The text to be printed.
+@param ...: Variadic arguments.
 */
-void println(const char *msg);
+void println(const char *msg, ...);
 
 /*
 Print a message with default colours (white on black).
 
 @param msg: The text to be printed.
+@param ...: Variadic arguments.
 */
-void print(const char *msg);
+void print(const char *msg, ...);
 
 /*
 Enable the blinking cursor.
