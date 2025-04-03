@@ -122,7 +122,7 @@ static void *locate_sdp() {
         return sdp;
     }
 
-    return false;
+    return 0;
 }
 
 /*

@@ -1,5 +1,6 @@
 #include "vga.h"
 #include "idt.h"
+#include "pic.h"
 #include "util.h"
 #include "ps2.h"
 #include "acpi.h"
@@ -20,6 +21,7 @@ void main() {
     }
     println("\n");
 
+    pic_init();
     idt_init();
     println("Interrupts successfully initialised.");
 

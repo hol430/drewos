@@ -52,6 +52,9 @@
 // interrupts are being serviced.
 #define PIC_READ_ISR 0x0b
 
+static uint8_t _offset0;
+static uint8_t _offset1;
+
 /*
 Send an end-of-interrupt command to the PIC.
 */
@@ -69,6 +72,9 @@ Re-initialise the PIC controllers, giving them the specified vector offsets.
 @param offset2: Vector offset for the slave PIC (offset2..offset2+7).
 */
 void pic_remap(int offset1, int offset2) {
+    _offset0 = offset1;
+    _offset1 = offset2;
+
     // The io_wait() calls may be necessary on older machines to give the PIC
     // some time to react to commands, as they might not be processed quickly.
 
@@ -117,9 +123,20 @@ void pic_remap(int offset1, int offset2) {
     write_byte(PIC_SLAVE_DATA, mask_slave);
 }
 
+void pic_init() {
+    pic_remap(0x20, 0x28);
+}
+
 void pic_disable() {
     write_byte(PIC_MASTER_DATA, 0xff);
     write_byte(PIC_SLAVE_DATA, 0xff);
+}
+
+uint8_t pic_get_vector(uint8_t irq) {
+    if (irq < 8) {
+        return _offset0 + irq;
+    }
+    return _offset1 + (irq - 8);
 }
 
 void irq_set_mask(uint8_t irq_line) {

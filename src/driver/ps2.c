@@ -1,7 +1,7 @@
-#include <stdint.h>
-#include <stdbool.h>
 
 #include "ps2.h"
+#include "ps2_keyboard.h"
+
 #include "low_level.h"
 #include "vga.h"
 #include "util.h"
@@ -76,6 +76,9 @@
 // An "acknowledge" response.
 #define RESP_ACK 0xfa
 
+// A "resend" response.
+#define RESP_RESEND 0xfe
+
 #define RESP_RESET_SUCCESS 0xaa
 #define RESP_RESET_FAIL 0xfc
 
@@ -134,11 +137,12 @@ typedef union {
     config_t config;
 } config_resp_t;
 
-// The ports available on the device.
+// The kind of device.
 typedef enum {
-    PORT0,
-    PORT1
-} port_t;
+    KEYBOARD,
+    MOUSE,
+    UNKNOWN
+} device_kind_t;
 
 // Colours usable in VGA colour text mode.
 typedef enum {
@@ -180,8 +184,26 @@ static uint16_t port0_id;
 // Device ID of the device in port 1, or 0 if empty/no device.
 static uint16_t port1_id;
 
-static device_type_t port0_type;
-static device_type_t port1_type;
+static device_kind_t get_device_kind(device_type_t type) {
+    switch (type) {
+        case MOUSE_PS2:
+        case MOUSE_SCROLL_WHEEL:
+        case MOUSE_5BUTTON:
+            return MOUSE;
+        case KBD_MF2:
+        case KBD_SHORT:
+        case KBD_N97:
+        case KBD_122KEY:
+        case KBD_JPN_G:
+        case KBD_JPN_P:
+        case KBD_JPN_A:
+        case KBD_NCD_SUN:
+            return KEYBOARD;
+        case DEV_UNKNOWN:
+        default:
+            return UNKNOWN;
+    }
+}
 
 static device_type_t get_device_type(uint16_t device_id) {
     switch (device_id) {
@@ -263,14 +285,7 @@ static bool response_ready() {
     return get_status() & 0x01;
 }
 
-/*
-Wait until the controller is ready for a command. This occurs when bit 1 of the
-status register is clear. Return true when the controller is ready, or false
-if wait iterations elapse.
-
-@param wait: Maximum number of iterations to wait.
-*/
-static bool buffer_wait() {
+bool ps2_buffer_wait() {
     uint32_t wait = DEFAULT_WAIT;
     while (!command_ready() && wait--);
     return wait;
@@ -290,7 +305,7 @@ static bool try_read_data(uint8_t *data) {
     return false;
 }
 
-static uint8_t read_data() {
+uint8_t ps2_read_data() {
     uint8_t byte;
     bool resp = try_read_data(&byte);
     if (!resp) {
@@ -300,17 +315,16 @@ static uint8_t read_data() {
     return byte;
 }
 
-static void send_data(uint8_t data) {
-    if (!buffer_wait()) {
+void ps2_send_data(uint8_t data) {
+    if (!ps2_buffer_wait()) {
         println("Error: PS/2 controller faield to enter ready state");
         return;
     }
     write_byte(PORT_DATA, data);
 }
 
-// Send a command to the controller.
-static void send_command(uint8_t command) {
-    if (!buffer_wait()) {
+void ps2_send_command(uint8_t command) {
+    if (!ps2_buffer_wait()) {
         println("Error: ps/2 controller failed to enter ready state");
         return;
     }
@@ -318,40 +332,38 @@ static void send_command(uint8_t command) {
     write_byte(PORT_COMMAND, command);
 }
 
-static void expect_ack(uint8_t cmd, port_t port) {
-    uint8_t resp;
+void ps2_send_device_command(uint8_t cmd, port_t port) {
+    if (port == PORT1) {
+        ps2_send_command(CMD_WRITE_INPUT_PORT_1);
+    }
+    ps2_send_data(cmd);
+
+    uint8_t resp = 0;
     bool has_resp = try_read_data(&resp);
     if (has_resp && resp != RESP_ACK) {
-        println("Error: device %d command %x failed; expected ACK (0xFA), but received %s", port, cmd, resp);
+        if (resp == RESP_RESEND) {
+            ps2_send_device_command(cmd, port);
+        } else {
+            println("Error: device %d command %x failed; expected ACK (0xFA), but received %x", port, cmd, resp);
+        }
     } else if (!has_resp) {
         // Timeout while waiting for a response.
         println("Error: device %d command %x did not generate a response (timeout)", port, cmd);
     }
-    // return 1;
 }
 
-// Send a command to one of the devices.
-static void send_device_command(uint8_t cmd, port_t port) {
-    if (port == PORT1) {
-        send_command(CMD_WRITE_INPUT_PORT_1);
-    }
-    send_data(cmd);
-
-    expect_ack(cmd, port);
-}
-
-static config_resp_t get_config() {
-    send_command(CMD_READ_RAM);
+static config_resp_t ps2_get_config() {
+    ps2_send_command(CMD_READ_RAM);
 
     config_resp_t config;
-    config.byte = read_data();
+    config.byte = ps2_read_data();
 
     return config;
 }
 
-static void set_config(config_resp_t config) {
-    send_command(CMD_WRITE_RAM);
-    send_data(config.byte);
+static void ps2_set_config(config_resp_t config) {
+    ps2_send_command(CMD_WRITE_RAM);
+    ps2_send_data(config.byte);
 }
 
 static void print_port_error_msg(uint8_t status) {
@@ -370,13 +382,13 @@ static void print_port_error_msg(uint8_t status) {
 
 static void reset_port(uint16_t *device_id, port_t port) {
     // The response from a reset device command is not necessarily ACK, so we
-    // don't use the standard send_device_command() function.
+    // don't use the standard ps2_send_device_command() function.
 
-    // send_device_command(CMD_RESET_DEVICE, port);
+    // ps2_send_device_command(CMD_RESET_DEVICE, port);
     if (port == PORT1) {
-        send_command(CMD_WRITE_INPUT_PORT_1);
+        ps2_send_command(CMD_WRITE_INPUT_PORT_1);
     }
-    send_data(CMD_RESET_DEVICE);
+    ps2_send_data(CMD_RESET_DEVICE);
 
     const uint8_t NRESP = 3;
     uint8_t resp[NRESP];
@@ -416,10 +428,10 @@ static void reset_port(uint16_t *device_id, port_t port) {
     }
 
     // Send the disable scanning command to the device.
-    send_device_command(CMD_DISABLE_SCAN, port);
+    ps2_send_device_command(CMD_DISABLE_SCAN, port);
 
     // Send the identify command to the device.
-    send_device_command(CMD_IDENTIFY, port);
+    ps2_send_device_command(CMD_IDENTIFY, port);
 
     // Wait for the device to send up to 2 bytes of reply.
     uint8_t response;
@@ -432,7 +444,27 @@ static void reset_port(uint16_t *device_id, port_t port) {
     }
 
     // Send the Enable Scanning command to the device.
-    send_device_command(CMD_ENABLE_SCAN, port);
+    ps2_send_device_command(CMD_ENABLE_SCAN, port);
+}
+
+void ps2_init_device(uint16_t device_id, port_t port) {
+    device_type_t type = get_device_type(device_id);
+    uint8_t portno = port ? 1 : 0;
+
+    if (type == DEV_UNKNOWN) {
+        println("Failed to initialise ps2 device in port %d: Unknown device (ID: %x)", port == PORT0 ? 0 : 1, port0_id);
+        return;
+    } else {
+        println("Port %d successfully initialised. Device type: %s", portno, get_device_type_str(type));
+    }
+
+    // Invoke the appropriate driver.
+    device_kind_t kind = get_device_kind(type);
+    if (kind == KEYBOARD) {
+        ps2_kbd_init(port);
+    } else if (kind == MOUSE) {
+        // ps2_mouse_init(port);
+    }
 }
 
 void ps2_init() {
@@ -440,8 +472,8 @@ void ps2_init() {
 
     // Disable devices to avoid them sending data partway through initialisation
     // of the controller.
-    send_command(CMD_DISABLE_PORT_0);
-    send_command(CMD_DISABLE_PORT_1);
+    ps2_send_command(CMD_DISABLE_PORT_0);
+    ps2_send_command(CMD_DISABLE_PORT_1);
 
     // Flush output buffer.
     read_byte(PORT_DATA);
@@ -449,23 +481,23 @@ void ps2_init() {
     // Modify the controller configuration.
 
     // Get the current configuration.
-    config_resp_t config = get_config();
+    config_resp_t config = ps2_get_config();
 
     // Disable IRQs and translation for port 1 by clearing bits 0 and 6. Also
     // ensure the clock signal is enabled by clearing bit 4.
-    config.config.port_0_interrupt = false;
+    config.config.port_0_interrupt = true;
     config.config.port_0_translation = false;
     config.config.clock_0 = false;
 
     // Now write the updated config.
-    set_config(config);
+    ps2_set_config(config);
 
     // To test the PS/2 controller, send command 0xAA to it, then wait for it to
     // respond and check if it replied with 0x55 (any value other than 0x55
     // indicates a self-test fail).
-    send_command(CMD_TEST);
+    ps2_send_command(CMD_TEST);
 
-    uint8_t result = read_data();
+    uint8_t result = ps2_read_data();
     if (result != 0x55) {
         println("Error: PS/2 self-test failed");
         return;
@@ -473,9 +505,9 @@ void ps2_init() {
 
     // The self-test can reset some controllers. In such cases, the config byte
     // should be restored to its previous value.
-    config_resp_t new_config = get_config();
+    config_resp_t new_config = ps2_get_config();
     if (new_config.byte != config.byte) {
-        set_config(config);
+        ps2_set_config(config);
     }
 
     // Check if this is a dual-channel controller.
@@ -484,27 +516,27 @@ void ps2_init() {
     // 5 of the Controller Configuration Byte should be clear - if it's set then
     // it can't be a dual channel PS/2 controller, because the second PS/2 port
     // should be enabled.
-    send_command(CMD_ENABLE_PORT_1);
+    ps2_send_command(CMD_ENABLE_PORT_1);
 
     // If a second port exists, enabling that port should cause the clock1 bit
     // of the config byte to be clear.
-    config = get_config();
+    config = ps2_get_config();
     dual_channel = config.config.clock_1 == 0;
 
     // If it's a dual channel device, disable the second port and then disable
     // IRQs and enable the clock for port 2.
     if (dual_channel) {
-        send_command(CMD_DISABLE_PORT_1);
+        ps2_send_command(CMD_DISABLE_PORT_1);
         config.config.port_1_interrupt = false;
         config.config.clock_1 = false;
-        set_config(config);
+        ps2_set_config(config);
     }
 
     // This step tests the PS/2 ports. Use command 0xAB to test the first PS/2
     // port, then check the result. Then (if it's a dual channel controller) use
     // command 0xA9 to test the second PS/2 port, then check the result.
-    send_command(CMD_TEST_PORT_0);
-    uint8_t resp = read_data();
+    ps2_send_command(CMD_TEST_PORT_0);
+    uint8_t resp = ps2_read_data();
 
     port_0_operational = resp == 0;
     if (!port_0_operational) {
@@ -513,8 +545,8 @@ void ps2_init() {
     }
 
     if (dual_channel) {
-        send_command(CMD_TEST_PORT_1);
-        resp = read_data();
+        ps2_send_command(CMD_TEST_PORT_1);
+        resp = ps2_read_data();
         port_1_operational = resp == 0;
         if (!port_1_operational) {
             print("PS/2 port 1 is faulty: ");
@@ -529,21 +561,21 @@ void ps2_init() {
 
     // Enable functional devices.
     if (port_0_operational) {
-        send_command(CMD_ENABLE_PORT_0);
+        ps2_send_command(CMD_ENABLE_PORT_0);
     }
     if (port_1_operational) {
-        send_command(CMD_ENABLE_PORT_1);
+        ps2_send_command(CMD_ENABLE_PORT_1);
     }
 
     // If using interrupts, enable interrupts on all functional ports.
-    // config = get_config();
-    // if (port_0_operational) {
-    //     config.config.port_0_interrupt = true;
-    // }
-    // if (port_1_operational) {
-    //     config.config.port_1_interrupt = true;
-    // }
-    // set_config(config);
+    config = ps2_get_config();
+    if (port_0_operational) {
+        config.config.port_0_interrupt = true;
+    }
+    if (port_1_operational) {
+        config.config.port_1_interrupt = true;
+    }
+    ps2_set_config(config);
 
     // All devices should be reset by sending 0xFF to port 1 (and port 2 for
     // dual channel controllers) and waiting for a response. If the response is
@@ -555,26 +587,14 @@ void ps2_init() {
 
     if (port_0_operational) {
         reset_port(&port0_id, PORT0);
-        port0_type = get_device_type(port0_id);
-        print("Port 0 successfully initialised. Device type: ");
-        if (port0_type == DEV_UNKNOWN) {
-            println("Unknown Device (ID: %x)", port0_id);
-        } else {
-            println(get_device_type_str(port0_type));
-        }
+        ps2_init_device(port0_id, PORT0);
     } else {
         port0_id = 0;
     }
 
     if (port_1_operational) {
         reset_port(&port1_id, PORT1);
-        port1_type = get_device_type(port1_id);
-        print("Port 1 successfully initialised. Device type: ");
-        if (port0_type == DEV_UNKNOWN) {
-            println("Unknown Device (ID: %x)", port1_id);
-        } else {
-            println(get_device_type_str(port1_type));
-        }
+        ps2_init_device(port1_id, PORT1);
     } else {
         port1_id = 0;
     }

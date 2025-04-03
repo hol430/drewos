@@ -29,6 +29,9 @@ typedef struct {
 
 void idt_set_descriptor(uint8_t vector, void *isr, uint8_t flags);
 
+void idt_install_irq_handler(uint8_t vector, void (*handler)());
+void idt_uninstall_irq_handler(uint8_t vector);
+
 void idt_init();
 
 #endif // _DREWOS_IDT_H_

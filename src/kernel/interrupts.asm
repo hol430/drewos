@@ -10,7 +10,20 @@ isr_stub_%+%1:
     iret
 %endmacro
 
+global generic_isr_stub
+generic_isr_stub:
+    pusha                   ; Save all general-purpose registers
+    mov eax, [esp + 32]     ; Retrieve interrupt vector from the stack
+    push eax                ; Push vector number onto the stack
+    call generic_handler    ; Call a single C handler
+    add esp, 4              ; Clean up pushed vector
+    popa                    ; Restore all registers
+    mov al, 0x20            ; Send end-of-interrupt (EOI) to PIC
+    out 0x20, al
+    iret                    ; Return from the interrupt
+
 extern exception_handler
+extern generic_handler
 
 isr_no_err_stub 0
 isr_no_err_stub 1
